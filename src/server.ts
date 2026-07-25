@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "./context.js";
+import { VERSION } from "./version.js";
 import {
   addChecklist,
   addChecklistDescription,
@@ -224,7 +225,7 @@ JOURNALING (a trip's travelogue of places the user actually visited):
 
 export function buildServer(ctx: AppContext): McpServer {
   const server = new McpServer(
-    { name: "wanderlog-mcp", version: "0.3.2" },
+    { name: "wanderlog-mcp", version: VERSION },
     { instructions: SERVER_INSTRUCTIONS },
   );
 
