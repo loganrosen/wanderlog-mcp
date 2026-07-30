@@ -19,6 +19,7 @@ The agent calls the tools, interleaves places and notes for each day, adds hotel
 ## What's New (Unreleased)
 
 - `wanderlog_search_hotels` — search Wanderlog's hotel aggregator across airbnb, expedia, google, and kayak. Returns ranked offers with per-vendor price comparison and faceted filter discovery so the LLM never has to memorise Wanderlog's internal enum values.
+- A failed startup authentication probe now gets one shared retry on the first tool call, allowing valid sessions to recover from a transient network or proxy error without restarting the server.
 
 ## What's New in v0.3.1
 
