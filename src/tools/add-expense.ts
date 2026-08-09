@@ -47,7 +47,7 @@ export const addExpenseInputSchema = {
     .min(1)
     .optional()
     .describe(
-      "Optional natural-language reference to link this expense to a place in the trip (e.g. 'Sensō-ji', 'the hotel'). Omit to log an unlinked expense (counts toward the budget total but isn't attached to a place).",
+      "Optional natural-language reference to link this expense to something in the trip — a place ('Sensō-ji', 'the hotel'), or a transit/rental reservation ('the ferry', 'the bus', 'the train', 'the rental car'). Omit to log an unlinked expense (counts toward the budget total but isn't attached).",
     ),
   date: z
     .string()
