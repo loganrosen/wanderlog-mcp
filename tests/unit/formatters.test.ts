@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatTrip, formatTripList } from "../../src/formatters/trip-summary.ts";
-import type { TripPlanSummary } from "../../src/types.ts";
+import { formatBlockLine, formatTrip, formatTripList } from "../../src/formatters/trip-summary.ts";
+import type { Block, TripPlanSummary } from "../../src/types.ts";
 import { queenstownTrip } from "../fixtures/queenstown-trip.ts";
 import { resolveDay } from "../../src/resolvers/day.ts";
 
@@ -94,5 +94,50 @@ describe("formatTrip", () => {
     const day = resolveDay(queenstownTrip, "day 3");
     const out = formatTrip(queenstownTrip, "concise", day);
     expect(out).toContain("no plans");
+  });
+});
+
+const mkTransit = (type: string) =>
+  ({
+    id: 1,
+    type,
+    carrier: "Acme Line",
+    depart: { place: { name: "Port A", place_id: "a" }, date: "2026-11-08", time: "09:00" },
+    arrive: { place: { name: "Port B", place_id: "b" }, date: "2026-11-08", time: "10:00" },
+    confirmationNumber: "CN1",
+  }) as unknown as Block;
+
+describe("transit block formatting", () => {
+  it("renders ferry, bus, train with an icon and route", () => {
+    for (const [type, icon] of [
+      ["ferry", "⛴"],
+      ["bus", "🚌"],
+      ["train", "🚆"],
+    ] as const) {
+      const line = formatBlockLine(mkTransit(type), "concise")!;
+      expect(line).toContain(icon);
+      expect(line).toContain("Acme Line");
+      expect(line).toContain("Port A");
+      expect(line).toContain("Port B");
+    }
+  });
+
+  it("renders a rentalCar with pickup/dropoff", () => {
+    const rental = {
+      id: 2,
+      type: "rentalCar",
+      pickUp: { date: "2026-11-01", time: "10:00", place: { name: "Europcar CUN", place_id: "c" } },
+      dropOff: {
+        date: "2026-11-08",
+        time: "13:00",
+        place: { name: "Europcar PDC", place_id: "d" },
+      },
+      confirmationNumber: "R9",
+    } as unknown as Block;
+    const line = formatBlockLine(rental, "detailed")!;
+    expect(line).toContain("🚗");
+    expect(line).toContain("Europcar CUN");
+    expect(line).toContain("Europcar PDC");
+    expect(line).toContain("R9");
   });
 });
