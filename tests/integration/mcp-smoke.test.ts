@@ -87,7 +87,7 @@ describe("MCP stdio server (smoke)", () => {
     expect(p.pid).toBeDefined();
   });
 
-  it("responds to tools/list with all 27 tools", async () => {
+  it("responds to tools/list with all 32 tools", async () => {
     const p = startServer();
     await waitForReady(p);
     await initialize(p);
@@ -100,14 +100,18 @@ describe("MCP stdio server (smoke)", () => {
     expect(resp.result).toBeDefined();
     const names = resp.result.tools.map((t: { name: string }) => t.name).sort();
     expect(names).toEqual([
+      "wanderlog_add_car_rental",
       "wanderlog_add_checklist",
       "wanderlog_add_expense",
       "wanderlog_add_hotel",
       "wanderlog_add_journal",
       "wanderlog_add_note",
       "wanderlog_add_place",
+      "wanderlog_add_section",
+      "wanderlog_add_transit",
       "wanderlog_annotate_place",
       "wanderlog_create_trip",
+      "wanderlog_delete_section",
       "wanderlog_edit_expense",
       "wanderlog_edit_journal",
       "wanderlog_edit_note",
@@ -126,6 +130,7 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_search_guides",
       "wanderlog_search_hotels",
       "wanderlog_search_places",
+      "wanderlog_update_section",
       "wanderlog_update_trip_dates",
     ]);
   });
