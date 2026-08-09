@@ -90,20 +90,47 @@ export type FlightBlock = {
   travelerNames?: string[];
 };
 
-export type StationEndpoint = {
+/**
+ * Shared shape for ferry / bus / train legs. Endpoints normally carry a full
+ * PlaceData, but `place` is optional because email-imported or partial blocks
+ * may omit it — reads must tolerate its absence (invariant #1).
+ */
+export type TransitEndpoint = {
+  place?: PlaceData;
   date?: string;
   time?: string;
-  place?: { name?: string; formatted_address?: string };
 };
 
-export type TrainBlock = {
+export type TransitBlock = {
   id: number;
-  type: "train";
+  type: "ferry" | "bus" | "train";
   carrier?: string;
-  depart?: StationEndpoint;
-  arrive?: StationEndpoint;
+  depart?: TransitEndpoint;
+  arrive?: TransitEndpoint;
+  confirmationNumber?: string;
+  /** Present on email-imported blocks (esp. trains); not set by our tools. */
+  travelerNames?: string[];
+  addedBy?: { type: string; userId: number };
+  text?: QuillDelta;
+  attachments?: unknown[];
+};
+
+export type RentalCarEndpoint = {
+  date?: string;
+  time?: string;
+  place?: PlaceData;
+};
+
+export type RentalCarBlock = {
+  id: number;
+  type: "rentalCar";
+  pickUp?: RentalCarEndpoint;
+  dropOff?: RentalCarEndpoint;
   confirmationNumber?: string;
   travelerNames?: string[];
+  addedBy?: { type: string; userId: number };
+  text?: QuillDelta;
+  attachments?: unknown[];
 };
 
 /** Fallback for unknown block types we haven't mapped yet. */
@@ -117,7 +144,8 @@ export type Block =
   | NoteBlock
   | ChecklistBlock
   | FlightBlock
-  | TrainBlock
+  | TransitBlock
+  | RentalCarBlock
   | UnknownBlock;
 
 export function isPlaceBlock(block: Block): block is PlaceBlock {
@@ -128,12 +156,21 @@ export function isChecklistBlock(block: Block): block is ChecklistBlock {
   return block.type === "checklist" && "items" in block;
 }
 
+export function isTransitBlock(block: Block): block is TransitBlock {
+  return block.type === "ferry" || block.type === "bus" || block.type === "train";
+}
+
+export function isRentalCarBlock(block: Block): block is RentalCarBlock {
+  return block.type === "rentalCar";
+}
+
 export type SectionType =
   | "textOnly"
   | "normal"
   | "hotels"
   | "flights"
   | "transit"
+  | "rentalCars"
   | string;
 
 export type Section = {
