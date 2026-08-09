@@ -12,7 +12,7 @@ Instead of clicking through the Wanderlog UI to plan a trip, you just ask:
 
 > *"Create a 14-day Japan Golden Route trip — Tokyo, Hakone, Kyoto, Nara, and Osaka."*
 
-The agent calls the tools, interleaves places and notes for each day, adds hotel blocks and checklists, and you end up with a fully populated Wanderlog trip in a few minutes.
+The agent calls the tools, interleaves places and notes for each day, adds hotel blocks, ferries, buses, trains, rental cars, and checklists, and you end up with a fully populated Wanderlog trip in a few minutes.
 
 **See a real example:** [14-day Japan Golden Route](https://wanderlog.com/view/dmvegdhqsa/japan-golden-route--tokyo--hakone--kyoto--nara--osaka) — built entirely by an AI agent using this MCP server.
 
@@ -98,6 +98,8 @@ and a ryokan in Shinjuku."
 | `wanderlog_edit_note` | Find-and-replace text in notes, place annotations, and checklists |
 | `wanderlog_remove_note` | Remove a standalone note block by natural-language reference |
 | `wanderlog_add_hotel` | Add a hotel booking with check-in/check-out dates |
+| `wanderlog_add_transit` | Add a ferry, bus, or train leg (carrier, from/to, dates/times) to the shared Transit section |
+| `wanderlog_add_car_rental` | Add a rental car with pick-up/drop-off locations and times |
 | `wanderlog_add_checklist` | Add a pre-trip or per-day checklist |
 | `wanderlog_add_expense` | Log a budget expense (amount, category, currency), optionally linked to a place |
 | `wanderlog_list_expenses` | List budget expenses, optionally filtered by description / date / amount / currency |
