@@ -2,7 +2,16 @@ import type { AppContext } from "../context.js";
 import { WanderlogError, WanderlogValidationError } from "../errors.js";
 import type { Json0Op } from "../ot/apply.js";
 import { resolveDay } from "../resolvers/day.js";
-import type { Block, ChecklistItem, Geo, PlaceData, Section, TripPlan } from "../types.js";
+import type {
+  Block,
+  ChecklistItem,
+  Geo,
+  PlaceData,
+  RentalCarEndpoint,
+  Section,
+  TransitEndpoint,
+  TripPlan,
+} from "../types.js";
 import { isPlaceBlock } from "../types.js";
 
 /**
@@ -303,6 +312,165 @@ export function buildNoteBlock(userId: number): Record<string, unknown> {
     addedBy: { type: "user", userId },
     attachments: [],
   };
+}
+
+export function buildTransitBlock(
+  type: "ferry" | "bus" | "train",
+  userId: number,
+  args: {
+    carrier: string;
+    depart: TransitEndpoint;
+    arrive: TransitEndpoint;
+    confirmationNumber?: string;
+    travelerNames?: string[];
+    notes?: string;
+  },
+): Block {
+  const block: Record<string, unknown> = {
+    id: generateBlockId(),
+    type,
+    carrier: args.carrier,
+    depart: args.depart,
+    arrive: args.arrive,
+    addedBy: { type: "user", userId },
+    text: { ops: [{ insert: args.notes ? `${args.notes}\n` : "\n" }] },
+    attachments: [],
+  };
+  if (args.confirmationNumber) block.confirmationNumber = args.confirmationNumber;
+  if (args.travelerNames && args.travelerNames.length > 0) {
+    block.travelerNames = args.travelerNames;
+  }
+  return block as unknown as Block;
+}
+
+export function buildRentalCarBlock(
+  userId: number,
+  args: {
+    pickUp: RentalCarEndpoint;
+    dropOff: RentalCarEndpoint;
+    confirmationNumber?: string;
+    travelerNames?: string[];
+    notes?: string;
+  },
+): Block {
+  const block: Record<string, unknown> = {
+    id: generateBlockId(),
+    type: "rentalCar",
+    addedBy: { type: "user", userId },
+    pickUp: args.pickUp,
+    dropOff: args.dropOff,
+    text: { ops: [{ insert: args.notes ? `${args.notes}\n` : "\n" }] },
+    attachments: [],
+  };
+  if (args.confirmationNumber) block.confirmationNumber = args.confirmationNumber;
+  if (args.travelerNames && args.travelerNames.length > 0) {
+    block.travelerNames = args.travelerNames;
+  }
+  return block as unknown as Block;
+}
+
+const TRANSIT_SECTION_META: Record<
+  "transit" | "rentalCars",
+  { heading: string; placeMarkerIcon: string; placeMarkerColor: string }
+> = {
+  transit: { heading: "Transit", placeMarkerIcon: "subway", placeMarkerColor: "#17b978" },
+  rentalCars: { heading: "Rental cars", placeMarkerIcon: "car", placeMarkerColor: "#38a4a6" },
+};
+
+/**
+ * Build a JSON0 `li` op that places `block` into the section of `sectionType`.
+ * Appends to an existing section's blocks, or inserts a new section (block
+ * embedded) at the end of itinerary.sections. Resolve-by-type keeps us safe
+ * against unstable indices (invariant #6).
+ */
+export function sectionInsertOp(
+  trip: TripPlan,
+  sectionType: "transit" | "rentalCars",
+  block: Block,
+): Json0Op {
+  const sections = trip.itinerary.sections;
+  const index = sections.findIndex((s) => s.type === sectionType);
+  if (index >= 0) {
+    return {
+      p: ["itinerary", "sections", index, "blocks", sections[index]!.blocks.length],
+      li: block,
+    };
+  }
+  const meta = TRANSIT_SECTION_META[sectionType];
+  const section = {
+    id: generateBlockId(),
+    type: sectionType,
+    mode: "placeList",
+    heading: meta.heading,
+    date: null,
+    blocks: [block],
+    placeMarkerColor: meta.placeMarkerColor,
+    placeMarkerIcon: meta.placeMarkerIcon,
+    text: { ops: [{ insert: "\n" }] },
+  };
+  return { p: ["itinerary", "sections", sections.length], li: section };
+}
+
+export function validateChronology(
+  startLabel: string,
+  startDate: string,
+  startTime: string,
+  endLabel: string,
+  endDate: string,
+  endTime: string,
+): void {
+  for (const [label, d] of [
+    [`${startLabel}_date`, startDate],
+    [`${endLabel}_date`, endDate],
+  ] as const) {
+    if (!isValidDate(d)) {
+      throw new WanderlogValidationError(`Invalid ${label}: "${d}". Use YYYY-MM-DD.`);
+    }
+  }
+  for (const [label, t] of [
+    [`${startLabel}_time`, startTime],
+    [`${endLabel}_time`, endTime],
+  ] as const) {
+    if (!TIME_REGEX.test(t)) {
+      throw new WanderlogValidationError(`Invalid ${label}: "${t}". Use HH:mm (00:00–23:59).`);
+    }
+  }
+  // Zero-padded ISO "YYYY-MM-DDTHH:mm" sorts chronologically as a string.
+  if (`${endDate}T${endTime}` < `${startDate}T${startTime}`) {
+    throw new WanderlogValidationError(
+      `${endLabel} (${endDate} ${endTime}) must be on or after ${startLabel} (${startDate} ${startTime}).`,
+    );
+  }
+}
+
+/** Resolve a place-name query to full PlaceData, biased to the trip center. */
+export async function resolveEndpointPlace(
+  ctx: AppContext,
+  trip: TripPlan,
+  geos: Geo[] | undefined,
+  query: string,
+): Promise<PlaceData> {
+  const center = findTripCenter(trip, geos);
+  if (!center) {
+    throw new WanderlogValidationError(
+      `Cannot resolve "${query}" in "${trip.title}" because no location anchor is available`,
+      "This trip has no associated geo and no existing places.",
+    );
+  }
+  const predictions = await ctx.rest.searchPlacesAutocomplete({
+    input: query,
+    sessionToken: crypto.randomUUID(),
+    location: { latitude: center.lat, longitude: center.lng },
+    radius: 15000,
+  });
+  if (predictions.length === 0) {
+    throw new WanderlogError(
+      `No place found matching "${query}" near ${trip.title}`,
+      "place_not_found",
+      "Try a more specific name or check the spelling.",
+    );
+  }
+  return ctx.rest.getPlaceDetails(predictions[0]!.place_id);
 }
 
 /** Build a checklist block with pre-populated items. */
