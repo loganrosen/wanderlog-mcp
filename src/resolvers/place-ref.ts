@@ -19,6 +19,15 @@ const MAX_AMBIGUOUS_CANDIDATES = 10;
 const HOTEL_KEYWORDS = new Set(["the hotel", "hotel", "my hotel"]);
 const FLIGHT_KEYWORDS = new Set(["the flight", "flight", "my flight"]);
 const TRAIN_KEYWORDS = new Set(["the train", "train", "my train"]);
+const FERRY_KEYWORDS = new Set(["the ferry", "ferry", "my ferry"]);
+const BUS_KEYWORDS = new Set(["the bus", "bus", "my bus"]);
+const RENTAL_CAR_KEYWORDS = new Set([
+  "the rental car",
+  "rental car",
+  "the car",
+  "my rental car",
+  "my car",
+]);
 
 const WORD_ORDINALS: Record<string, number> = {
   first: 1,
@@ -77,8 +86,9 @@ export function parseOrdinal(ref: string): ParsedOrdinal | null {
  *   1. Compound "<thing> on <context>" — left side resolved by stages 2-4,
  *      then filtered to candidates whose parent section matches the context
  *      (currently only day references are understood on the right).
- *   2. Role keywords ("the hotel", "the flight", "the train") — first block
- *      in the appropriate role section.
+ *   2. Role keywords ("the hotel", "the flight", "the train", "the ferry",
+ *      "the bus", "the rental car") — first block in the appropriate role
+ *      section.
  *   3. Exact (case-insensitive) match against `block.place.name`.
  *   4. Substring (case-insensitive) match against `block.place.name`.
  *
@@ -144,6 +154,23 @@ function matchRoleKeyword(trip: TripPlan, ref: string): PlaceRefMatch[] {
       (s) => s.type === "transit",
       (b) => b.type === "train",
     );
+  }
+  if (FERRY_KEYWORDS.has(ref)) {
+    return firstBlockOfSectionType(
+      trip,
+      (s) => s.type === "transit",
+      (b) => b.type === "ferry",
+    );
+  }
+  if (BUS_KEYWORDS.has(ref)) {
+    return firstBlockOfSectionType(
+      trip,
+      (s) => s.type === "transit",
+      (b) => b.type === "bus",
+    );
+  }
+  if (RENTAL_CAR_KEYWORDS.has(ref)) {
+    return firstBlockOfSectionType(trip, (s) => s.type === "rentalCars");
   }
   return [];
 }

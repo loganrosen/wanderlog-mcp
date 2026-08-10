@@ -72,12 +72,12 @@ export const mixedBlocksTrip: TripPlan = {
             depart: {
               date: "2025-11-18",
               time: "10:00",
-              place: { name: "Shinjuku Station" },
+              place: { name: "Shinjuku Station", place_id: "ChIJ_fixture_shinjuku" },
             },
             arrive: {
               date: "2025-11-18",
               time: "11:30",
-              place: { name: "Odawara Station" },
+              place: { name: "Odawara Station", place_id: "ChIJ_fixture_odawara" },
             },
           },
         ],

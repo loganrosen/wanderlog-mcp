@@ -6,8 +6,9 @@ import type {
   NoteBlock,
   PlaceBlock,
   QuillDelta,
+  RentalCarBlock,
   Section,
-  TrainBlock,
+  TransitBlock,
   TripPlan,
   TripPlanSummary,
   UnknownBlock,
@@ -107,6 +108,8 @@ function sectionIcon(section: Section): string {
       return "✈";
     case "transit":
       return "🚆";
+    case "rentalCars":
+      return "🚗";
     case "textOnly":
       return "📝";
     default:
@@ -122,6 +125,8 @@ function sectionDefaultHeading(section: Section): string {
       return "Flights";
     case "transit":
       return "Transit";
+    case "rentalCars":
+      return "Rental cars";
     default:
       return "Places";
   }
@@ -176,7 +181,11 @@ export function formatBlockLine(block: Block, format: ResponseFormat): string | 
       case "flight":
         return formatFlightBlock(block as FlightBlock, format);
       case "train":
-        return formatTrainBlock(block as TrainBlock, format);
+      case "ferry":
+      case "bus":
+        return formatTransitBlock(block as TransitBlock, format);
+      case "rentalCar":
+        return formatRentalCarBlock(block as RentalCarBlock, format);
       default:
         return formatUnknownBlock(block as UnknownBlock);
     }
@@ -286,22 +295,46 @@ function formatFlightBlock(block: FlightBlock, format: ResponseFormat): string {
   return parts.join(" · ");
 }
 
-function formatTrainBlock(block: TrainBlock, format: ResponseFormat): string {
-  const carrier = block.carrier ?? "Train";
+const TRANSIT_ICON: Record<string, string> = { train: "🚆", ferry: "⛴", bus: "🚌" };
+
+function formatTransitBlock(block: TransitBlock, format: ResponseFormat): string {
+  const icon = TRANSIT_ICON[block.type] ?? "🚆";
+  const carrier = block.carrier ?? block.type;
   const from = block.depart?.place?.name ?? "?";
   const to = block.arrive?.place?.name ?? "?";
   const departDate = block.depart?.date ?? "";
   const departTime = block.depart?.time ? ` ${block.depart.time}` : "";
 
   if (format === "concise") {
-    return `🚆 ${carrier} · ${from} → ${to}${departDate ? ` · ${departDate}${departTime}` : ""}`;
+    return `${icon} ${carrier} · ${from} → ${to}${departDate ? ` · ${departDate}${departTime}` : ""}`;
   }
   const parts = [
-    `🚆 ${carrier}`,
+    `${icon} ${carrier}`,
     `${from} → ${to}`,
     `${departDate}${departTime} → ${block.arrive?.date ?? ""}${block.arrive?.time ? ` ${block.arrive.time}` : ""}`,
   ];
   if (block.confirmationNumber) parts.push(`conf. ${block.confirmationNumber}`);
+  if (block.travelerNames?.length) parts.push(`pax: ${block.travelerNames.join(", ")}`);
+  return parts.join(" · ");
+}
+
+function formatRentalCarBlock(block: RentalCarBlock, format: ResponseFormat): string {
+  const pickPlace = block.pickUp?.place?.name ?? "?";
+  const dropPlace = block.dropOff?.place?.name ?? "?";
+  const pick =
+    `${block.pickUp?.date ?? ""}${block.pickUp?.time ? ` ${block.pickUp.time}` : ""}`.trim();
+  const drop =
+    `${block.dropOff?.date ?? ""}${block.dropOff?.time ? ` ${block.dropOff.time}` : ""}`.trim();
+
+  if (format === "concise") {
+    return `🚗 ${pickPlace} → ${dropPlace}${pick ? ` · ${pick} → ${drop}` : ""}`;
+  }
+  const parts = [
+    `🚗 pick-up ${pickPlace}${pick ? ` ${pick}` : ""}`,
+    `drop-off ${dropPlace}${drop ? ` ${drop}` : ""}`,
+  ];
+  if (block.confirmationNumber) parts.push(`conf. ${block.confirmationNumber}`);
+  if (block.travelerNames?.length) parts.push(`pax: ${block.travelerNames.join(", ")}`);
   return parts.join(" · ");
 }
 

@@ -175,3 +175,57 @@ describe("resolvePlaceRef", () => {
     }
   });
 });
+
+function transitTrip(): TripPlan {
+  return {
+    itinerary: {
+      sections: [
+        {
+          id: 1,
+          type: "normal",
+          mode: "placeList",
+          heading: "Places to visit",
+          date: null,
+          blocks: [],
+        },
+        {
+          id: 2,
+          type: "transit",
+          mode: "placeList",
+          heading: "Transit",
+          date: null,
+          blocks: [
+            { id: 10, type: "ferry", carrier: "CTM" },
+            { id: 11, type: "bus", carrier: "FlixBus" },
+          ],
+        },
+        {
+          id: 3,
+          type: "rentalCars",
+          mode: "placeList",
+          heading: "Rental cars",
+          date: null,
+          blocks: [{ id: 20, type: "rentalCar" }],
+        },
+      ],
+    },
+  } as unknown as TripPlan;
+}
+
+describe("resolvePlaceRef role keywords for transit/rental", () => {
+  it("resolves 'the ferry' and 'the bus' to the right transit block", () => {
+    const trip = transitTrip();
+    const ferry = resolvePlaceRef(trip, "the ferry");
+    expect(ferry.kind).toBe("unique");
+    expect(ferry.kind === "unique" && ferry.match.block.id).toBe(10);
+    const bus = resolvePlaceRef(trip, "the bus");
+    expect(bus.kind === "unique" && bus.match.block.id).toBe(11);
+  });
+  it("resolves 'the rental car' and 'the car' to the rentalCars block", () => {
+    const trip = transitTrip();
+    for (const ref of ["the rental car", "the car"]) {
+      const r = resolvePlaceRef(trip, ref);
+      expect(r.kind === "unique" && r.match.block.id).toBe(20);
+    }
+  });
+});
