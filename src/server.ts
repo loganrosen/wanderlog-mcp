@@ -168,12 +168,40 @@ const AUTH_ERROR_RESPONSE = {
   isError: true,
 };
 
-function requireAuth(
+type ToolHandler = (
+  args: Record<string, unknown>,
+) => Promise<{
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
+}>;
+
+const lazyAuthAttempts = new WeakMap<AppContext, Promise<boolean>>();
+
+async function ensureAuthenticated(ctx: AppContext): Promise<boolean> {
+  if (ctx.authenticated) return true;
+
+  let attempt = lazyAuthAttempts.get(ctx);
+  if (!attempt) {
+    attempt = ctx.rest
+      .getUser()
+      .then((user) => {
+        ctx.userId = user.id;
+        ctx.authenticated = true;
+        return true;
+      })
+      .catch(() => false);
+    lazyAuthAttempts.set(ctx, attempt);
+  }
+
+  return attempt;
+}
+
+export function requireAuth(
   ctx: AppContext,
-  handler: (args: Record<string, unknown>) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }>,
+  handler: ToolHandler,
 ) {
   return async (args: Record<string, unknown>) => {
-    if (!ctx.authenticated) return AUTH_ERROR_RESPONSE;
+    if (!(await ensureAuthenticated(ctx))) return AUTH_ERROR_RESPONSE;
     return handler(args);
   };
 }
