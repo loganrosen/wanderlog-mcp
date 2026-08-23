@@ -120,11 +120,21 @@ describe("Mutation tools (live round-trip)", () => {
     const originalBlocks = beforeDay.blocks.map((block) => structuredClone(block));
     const originalIds = originalBlocks.map((block) => block.id);
     expect(originalIds).toHaveLength(3);
+    expect(originalBlocks.every(isPlaceBlock)).toBe(true);
+    const firstName = isPlaceBlock(originalBlocks[0]!)
+      ? originalBlocks[0]!.place.name
+      : "";
+    const secondName = isPlaceBlock(originalBlocks[1]!)
+      ? originalBlocks[1]!.place.name
+      : "";
+    const thirdName = isPlaceBlock(originalBlocks[2]!)
+      ? originalBlocks[2]!.place.name
+      : "";
 
     const backward = await moveBlock(ctx, {
       trip_key: tripKey!,
-      block: "Elevador de Santa Justa",
-      before: "Castelo de São Jorge",
+      block: thirdName,
+      before: firstName,
     });
     if (backward.isError) {
       throw new Error(`move_block backward failed: ${backward.content[0]!.text}`);
@@ -147,8 +157,8 @@ describe("Mutation tools (live round-trip)", () => {
 
     const forward = await moveBlock(ctx, {
       trip_key: tripKey!,
-      block: "Elevador de Santa Justa",
-      after: "Praça do Comércio",
+      block: thirdName,
+      after: secondName,
     });
     if (forward.isError) {
       throw new Error(`move_block forward failed: ${forward.content[0]!.text}`);
