@@ -51,12 +51,45 @@ async function withSubmitLock<T>(
  *   next read refetches a fresh snapshot from the server.
  * - On success, cache.applyLocalOp() is called with the server-accepted version.
  */
-export async function submitOp(
+export type LockScopedOp<T> = {
+  ops: Json0Op[];
+  afterApply: (snapshot: TripPlan) => T;
+};
+
+export type LockScopedOpBuilder<T> = (snapshot: TripPlan) => LockScopedOp<T>;
+
+export function submitOp(
   ctx: AppContext,
   tripKey: string,
   ops: Json0Op[],
-): Promise<void> {
+): Promise<void>;
+export function submitOp<T>(
+  ctx: AppContext,
+  tripKey: string,
+  build: LockScopedOpBuilder<T>,
+): Promise<T>;
+export async function submitOp<T>(
+  ctx: AppContext,
+  tripKey: string,
+  opsOrBuilder: Json0Op[] | LockScopedOpBuilder<T>,
+): Promise<T | void> {
   return withSubmitLock(tripKey, async () => {
+    let snapshot: TripPlan | undefined;
+    let afterApply: ((snapshot: TripPlan) => T) | undefined;
+    let ops: Json0Op[];
+
+    if (typeof opsOrBuilder === "function") {
+      snapshot = await ctx.tripCache.get(tripKey);
+      const prepared = opsOrBuilder(snapshot);
+      ops = prepared.ops;
+      afterApply = prepared.afterApply;
+      if (ops.length === 0) {
+        return afterApply(snapshot);
+      }
+    } else {
+      ops = opsOrBuilder;
+    }
+
     const client = ctx.pool.get(tripKey);
     if (!client.isSubscribed) {
       throw new WanderlogError(
@@ -67,6 +100,10 @@ export async function submitOp(
     try {
       await submitWithRateLimitRetry(client, ops);
       ctx.tripCache.applyLocalOp(tripKey, ops, client.version);
+      if (afterApply) {
+        const updated = await ctx.tripCache.get(tripKey);
+        return afterApply(updated);
+      }
     } catch (err) {
       // Any submit failure leaves our cached view possibly inconsistent with
       // the server. Invalidate so the next get() refetches + resubscribes.

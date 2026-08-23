@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AppContext } from "../../src/context.ts";
-import type { Json0Op } from "../../src/ot/apply.ts";
+import { applyOp, type Json0Op } from "../../src/ot/apply.ts";
 import { submitOp } from "../../src/tools/shared.ts";
+import type { TripPlan } from "../../src/types.ts";
 
 /**
  * Exercises the per-trip submit mutex in isolation. Uses a fake AppContext
@@ -157,5 +158,86 @@ describe("submitOp per-trip mutex", () => {
     await submitOp(holder.ctx, "tripA", ops);
     expect(holder.applyLocalOpCount).toBe(1);
     expect(holder.invalidateCount).toBe(0);
+  });
+
+  it("builds index-sensitive ops from the latest snapshot while holding the lock", async () => {
+    let snapshot = {
+      itinerary: {
+        sections: [
+          {
+            id: 1,
+            type: "normal",
+            mode: "dayPlan",
+            heading: "",
+            date: "2026-08-01",
+            blocks: [
+              { id: 1, type: "place", place: { name: "A", place_id: "A" } },
+              { id: 2, type: "place", place: { name: "B", place_id: "B" } },
+            ],
+          },
+        ],
+      },
+    } as TripPlan;
+    const submittedOps: Json0Op[][] = [];
+    const events: string[] = [];
+    const client = {
+      isSubscribed: true,
+      version: 1,
+      async submit(ops: Json0Op[]) {
+        submittedOps.push(ops);
+        this.version += 1;
+      },
+    };
+    const ctx = {
+      pool: { get: () => client },
+      tripCache: {
+        get: async () => snapshot,
+        applyLocalOp: (_tripKey: string, ops: Json0Op[]) => {
+          snapshot = applyOp(snapshot, ops);
+        },
+        invalidate: () => {},
+      },
+    } as unknown as AppContext;
+
+    await Promise.all([
+      submitOp(ctx, "tripA", [
+        { p: ["itinerary", "sections", 0, "blocks", 0], lm: 1 },
+      ]),
+      submitOp(ctx, "tripA", (lockedSnapshot) => {
+        events.push(
+          `second-build:${lockedSnapshot.itinerary.sections[0]!.blocks.map((b) => b.id).join(",")}`,
+        );
+        return {
+          ops: [
+            {
+              p: ["itinerary", "sections", 0, "blocks", 1],
+              lm: 0,
+            },
+          ],
+          afterApply: (updated) => {
+            events.push(
+              `second-after:${updated.itinerary.sections[0]!.blocks.map((b) => b.id).join(",")}`,
+            );
+            return undefined;
+          },
+        };
+      }),
+      submitOp(ctx, "tripA", (lockedSnapshot) => {
+        events.push(
+          `third-build:${lockedSnapshot.itinerary.sections[0]!.blocks.map((b) => b.id).join(",")}`,
+        );
+        return {
+          ops: [],
+          afterApply: () => undefined,
+        };
+      }),
+    ]);
+
+    expect(submittedOps).toHaveLength(2);
+    expect(events).toEqual([
+      "second-build:2,1",
+      "second-after:1,2",
+      "third-build:1,2",
+    ]);
   });
 });
