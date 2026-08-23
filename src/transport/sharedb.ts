@@ -443,6 +443,15 @@ export class ShareDBPool {
     return this.clients.has(tripKey);
   }
 
+  evict(tripKey: string, expectedClient?: ShareDBClient): boolean {
+    const client = this.clients.get(tripKey);
+    if (!client || (expectedClient && client !== expectedClient)) return false;
+
+    this.clients.delete(tripKey);
+    client.close();
+    return true;
+  }
+
   closeAll(): void {
     for (const client of this.clients.values()) {
       client.close();
