@@ -58,13 +58,13 @@ export async function submitOp(
 ): Promise<void> {
   return withSubmitLock(tripKey, async () => {
     const client = ctx.pool.get(tripKey);
-    if (!client.isSubscribed) {
-      throw new WanderlogError(
-        `Trip ${tripKey} is not subscribed — call tripCache.get() first`,
-        "not_subscribed",
-      );
-    }
     try {
+      if (!client.isSubscribed) {
+        throw new WanderlogError(
+          `Trip ${tripKey} is not subscribed — call tripCache.get() first`,
+          "not_subscribed",
+        );
+      }
       await submitWithRateLimitRetry(client, ops);
       ctx.tripCache.applyLocalOp(tripKey, ops, client.version);
     } catch (err) {

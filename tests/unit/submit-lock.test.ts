@@ -19,6 +19,8 @@ type SubmitRecord = {
 function makeFakeContext(options: {
   submitDelay: number;
   failOn?: (callIndex: number) => boolean;
+  subscribed?: boolean;
+  unsubscribeOnInvalidate?: boolean;
 }): {
   ctx: AppContext;
   records: SubmitRecord[];
@@ -31,7 +33,7 @@ function makeFakeContext(options: {
   let applyLocalOpCount = 0;
 
   const fakeClient = {
-    isSubscribed: true,
+    isSubscribed: options.subscribed ?? true,
     version: 0,
     async submit(_ops: Json0Op[]): Promise<void> {
       const thisCall = callIndex++;
@@ -62,6 +64,7 @@ function makeFakeContext(options: {
       },
       invalidate: (_tripKey: string) => {
         invalidateCount++;
+        if (options.unsubscribeOnInvalidate) fakeClient.isSubscribed = false;
       },
     },
   } as unknown as AppContext;
@@ -138,6 +141,25 @@ describe("submitOp per-trip mutex", () => {
     expect(results[2]!.status).toBe("fulfilled");
   });
 
+  it("runs queued submits after invalidation even when their stale clients reject", async () => {
+    const holder = makeFakeContext({
+      submitDelay: 10,
+      failOn: (i) => i === 0,
+      unsubscribeOnInvalidate: true,
+    });
+    const ops: Json0Op[] = [{ p: ["a"], oi: 1 }];
+
+    const results = await Promise.allSettled([
+      submitOp(holder.ctx, "tripA", ops),
+      submitOp(holder.ctx, "tripA", ops),
+      submitOp(holder.ctx, "tripA", ops),
+    ]);
+
+    expect(results.every((result) => result.status === "rejected")).toBe(true);
+    expect(holder.records).toHaveLength(1);
+    expect(holder.invalidateCount).toBe(3);
+  });
+
   it("invalidates the cache on submit failure", async () => {
     const holder = makeFakeContext({
       submitDelay: 10,
@@ -146,6 +168,21 @@ describe("submitOp per-trip mutex", () => {
     const ops: Json0Op[] = [{ p: ["a"], oi: 1 }];
 
     await expect(submitOp(holder.ctx, "tripA", ops)).rejects.toThrow();
+    expect(holder.invalidateCount).toBe(1);
+    expect(holder.applyLocalOpCount).toBe(0);
+  });
+
+  it("invalidates the cache when the client is no longer subscribed", async () => {
+    const holder = makeFakeContext({
+      submitDelay: 0,
+      subscribed: false,
+    });
+    const ops: Json0Op[] = [{ p: ["a"], oi: 1 }];
+
+    await expect(submitOp(holder.ctx, "tripA", ops)).rejects.toMatchObject({
+      code: "not_subscribed",
+    });
+    expect(holder.records).toHaveLength(0);
     expect(holder.invalidateCount).toBe(1);
     expect(holder.applyLocalOpCount).toBe(0);
   });
