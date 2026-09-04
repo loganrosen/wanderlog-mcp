@@ -129,14 +129,11 @@ export class TripCache {
 
   private deleteEntry(tripKey: string): void {
     const entry = this.entries.get(tripKey);
-    if (entry) {
-      entry.client.off("remoteOp", entry.remoteOpListener);
-      entry.client.off("closed", entry.closedListener);
-      this.entries.delete(tripKey);
-      this.pool.evict(tripKey, entry.client);
-      return;
-    }
-    this.pool.evict(tripKey);
+    if (!entry) return;
+    entry.client.off("remoteOp", entry.remoteOpListener);
+    entry.client.off("closed", entry.closedListener);
+    this.entries.delete(tripKey);
+    this.pool.evict(tripKey, entry.client);
   }
 
   invalidate(tripKey: string): void {

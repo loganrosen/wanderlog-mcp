@@ -48,7 +48,8 @@ async function withSubmitLock<T>(
  * Rules:
  * - Per-trip mutex: concurrent calls on the same trip serialize automatically.
  * - Each successful batch is applied to the stable entry before `submit` returns.
- * - Only submit/apply failures invalidate the cache; callback errors do not.
+ * - Ambiguous submit failures and local apply failures invalidate the cache.
+ * - Confirmed server rejections and callback errors leave the cache intact.
  */
 export async function submitOp<T>(
   ctx: AppContext,
@@ -71,6 +72,14 @@ export async function submitOp<T>(
           );
         }
         await submitWithRateLimitRetry(client, ops);
+      } catch (err) {
+        if (!isConfirmedNonApplication(err)) {
+          ctx.tripCache.invalidate(tripKey);
+        }
+        throw err;
+      }
+
+      try {
         ctx.tripCache.applyLocalOp(tripKey, ops, client.version);
       } catch (err) {
         ctx.tripCache.invalidate(tripKey);
@@ -80,6 +89,20 @@ export async function submitOp<T>(
 
     return mutate(entry, submit);
   });
+}
+
+const CONFIRMED_NON_APPLICATION_CODES = new Set([
+  "empty_op",
+  "rate_limited",
+  "ws_not_open",
+  "ws_op_rejected",
+]);
+
+function isConfirmedNonApplication(err: unknown): boolean {
+  return (
+    err instanceof WanderlogError &&
+    CONFIRMED_NON_APPLICATION_CODES.has(err.code)
+  );
 }
 
 const RATE_LIMIT_RETRY_DELAYS_MS = [2_000, 4_000, 8_000];

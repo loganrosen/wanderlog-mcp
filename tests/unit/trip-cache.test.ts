@@ -115,9 +115,34 @@ describe("TripCache subscription lifecycle", () => {
     expect(pool.has("tripA")).toBe(false);
   });
 
+  it("does not evict a replacement client when invalidating an absent entry", async () => {
+    const { cache, pool } = makeCache();
+    await cache.get("tripA");
+    const firstClient = pool.created.get("tripA")![0]!;
+    firstClient.disconnect();
+    const replacementClient = pool.get("tripA");
+
+    cache.invalidate("tripA");
+
+    expect(pool.has("tripA")).toBe(true);
+    expect(replacementClient.closeCalled).toBe(0);
+  });
+
+  it("treats repeated invalidation as a no-op", async () => {
+    const { cache, pool } = makeCache();
+    await cache.get("tripA");
+    const client = pool.created.get("tripA")![0]!;
+
+    cache.invalidate("tripA");
+    cache.invalidate("tripA");
+
+    expect(client.closeCalled).toBe(1);
+    expect(pool.has("tripA")).toBe(false);
+  });
+
   it("recovers from a normal close with a fresh client and snapshot", async () => {
     const { cache, pool, getTripCalls } = makeCache();
-    const first = await cache.getEntry("tripA");
+    await cache.getEntry("tripA");
     const firstClient = pool.created.get("tripA")![0]!;
 
     firstClient.disconnect(1000);
@@ -154,7 +179,6 @@ describe("TripCache subscription lifecycle", () => {
       pool: pool as unknown as ShareDBPool,
       tripCache: cache,
     } as AppContext;
-
     await expect(
       submitOp(ctx, "tripA", (entry, submit) => {
         const ops: Json0Op[] = [
@@ -168,7 +192,6 @@ describe("TripCache subscription lifecycle", () => {
         return submit(ops);
       }),
     ).rejects.toMatchObject({ code: "not_subscribed" });
-
     await submitOp(ctx, "tripA", (entry, submit) =>
       submit([
         {
