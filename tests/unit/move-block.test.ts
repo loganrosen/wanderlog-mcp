@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CacheEntry } from "../../src/cache/trip-cache.ts";
 import type { AppContext } from "../../src/context.ts";
 import { applyOp, type Json0Op } from "../../src/ot/apply.ts";
 import {
@@ -89,7 +90,11 @@ function makeFakeContext(
   currentTrip: () => TripPlan;
   invalidations: () => number;
 } {
-  let snapshot = structuredClone(trip);
+  const entry: CacheEntry = {
+    snapshot: structuredClone(trip),
+    version: 1,
+    geos: [],
+  };
   let invalidationCount = 0;
   const submittedOps: Json0Op[][] = [];
   const client = {
@@ -103,10 +108,10 @@ function makeFakeContext(
   const ctx = {
     pool: { get: () => client },
     tripCache: {
-      get: async () => snapshot,
+      getEntry: async () => entry,
       applyLocalOp: (_tripKey: string, ops: Json0Op[]) => {
         if (options.applyLocally !== false) {
-          snapshot = applyOp(snapshot, ops);
+          entry.snapshot = applyOp(entry.snapshot, ops);
         }
       },
       invalidate: () => {
@@ -117,7 +122,7 @@ function makeFakeContext(
   return {
     ctx,
     submittedOps,
-    currentTrip: () => snapshot,
+    currentTrip: () => entry.snapshot,
     invalidations: () => invalidationCount,
   };
 }

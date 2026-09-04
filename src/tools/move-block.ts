@@ -96,8 +96,23 @@ export async function moveBlock(
       );
     }
 
-    const outcome = await submitOp(ctx, parsed.data.trip_key, (trip) =>
-      buildMove(trip, parsed.data),
+    const outcome = await submitOp(
+      ctx,
+      parsed.data.trip_key,
+      async (entry, submit) => {
+        const prepared = buildMove(entry.snapshot, parsed.data);
+        if (prepared.ops.length === 0) {
+          return prepared.afterApply(entry.snapshot);
+        }
+
+        await submit(prepared.ops);
+        try {
+          return prepared.afterApply(entry.snapshot);
+        } catch (err) {
+          ctx.tripCache.invalidate(parsed.data.trip_key);
+          throw err;
+        }
+      },
     );
 
     const text = outcome.moved
