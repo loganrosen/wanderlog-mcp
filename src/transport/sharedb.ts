@@ -213,7 +213,7 @@ export class ShareDBClient extends EventEmitter {
         const pending = this.pendingOps.get(frame.seq)!;
         this.pendingOps.delete(frame.seq);
         clearTimeout(pending.timer);
-        pending.reject(new WanderlogError(errMsg, "ws_error"));
+        pending.reject(new WanderlogError(errMsg, "ws_op_rejected"));
         return;
       }
 

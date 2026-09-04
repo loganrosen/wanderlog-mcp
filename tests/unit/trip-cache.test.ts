@@ -115,9 +115,34 @@ describe("TripCache subscription lifecycle", () => {
     expect(pool.has("tripA")).toBe(false);
   });
 
+  it("does not evict a replacement client when invalidating an absent entry", async () => {
+    const { cache, pool } = makeCache();
+    await cache.get("tripA");
+    const firstClient = pool.created.get("tripA")![0]!;
+    firstClient.disconnect();
+    const replacementClient = pool.get("tripA");
+
+    cache.invalidate("tripA");
+
+    expect(pool.has("tripA")).toBe(true);
+    expect(replacementClient.closeCalled).toBe(0);
+  });
+
+  it("treats repeated invalidation as a no-op", async () => {
+    const { cache, pool } = makeCache();
+    await cache.get("tripA");
+    const client = pool.created.get("tripA")![0]!;
+
+    cache.invalidate("tripA");
+    cache.invalidate("tripA");
+
+    expect(client.closeCalled).toBe(1);
+    expect(pool.has("tripA")).toBe(false);
+  });
+
   it("recovers from a normal close with a fresh client and snapshot", async () => {
     const { cache, pool, getTripCalls } = makeCache();
-    const first = await cache.getEntry("tripA");
+    await cache.getEntry("tripA");
     const firstClient = pool.created.get("tripA")![0]!;
 
     firstClient.disconnect(1000);
@@ -154,33 +179,31 @@ describe("TripCache subscription lifecycle", () => {
       pool: pool as unknown as ShareDBPool,
       tripCache: cache,
     } as AppContext;
-    const first = await cache.getEntry("tripA");
-    const firstClient = pool.created.get("tripA")![0]!;
-    const staleOps: Json0Op[] = [
-      {
-        p: ["title"],
-        od: first.snapshot.title,
-        oi: "stale mutation",
-      },
-    ];
+    await expect(
+      submitOp(ctx, "tripA", (entry, submit) => {
+        const ops: Json0Op[] = [
+          {
+            p: ["title"],
+            od: entry.snapshot.title,
+            oi: "interrupted mutation",
+          },
+        ];
+        (entry.client as unknown as FakeShareDBClient).disconnect(1000);
+        return submit(ops);
+      }),
+    ).rejects.toMatchObject({ code: "not_subscribed" });
 
-    firstClient.disconnect(1000);
+    await submitOp(ctx, "tripA", (entry, submit) =>
+      submit([
+        {
+          p: ["title"],
+          od: entry.snapshot.title,
+          oi: "recovered mutation",
+        },
+      ]),
+    );
 
-    await expect(submitOp(ctx, "tripA", staleOps)).rejects.toMatchObject({
-      code: "not_subscribed",
-    });
-
-    const fresh = await cache.getEntry("tripA");
-    const freshClient = pool.created.get("tripA")![2]!;
-    const freshOps: Json0Op[] = [
-      {
-        p: ["title"],
-        od: fresh.snapshot.title,
-        oi: "recovered mutation",
-      },
-    ];
-    await submitOp(ctx, "tripA", freshOps);
-
+    const freshClient = pool.created.get("tripA")![1]!;
     expect(freshClient.submitCalled).toBe(1);
     expect((await cache.get("tripA")).title).toBe("recovered mutation");
   });
