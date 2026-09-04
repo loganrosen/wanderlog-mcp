@@ -36,14 +36,14 @@ export const moveBlockInputSchema = z
       .min(1)
       .optional()
       .describe(
-        "Move immediately before this naturally referenced place or reservation block in the same section.",
+        "Move immediately before this naturally referenced place or reservation block in the same section. Notes and checklists are not valid targets.",
       ),
     after: z
       .string()
       .min(1)
       .optional()
       .describe(
-        "Move immediately after this naturally referenced place or reservation block in the same section.",
+        "Move immediately after this naturally referenced place or reservation block in the same section. Notes and checklists are not valid targets.",
       ),
   })
   .refine(
@@ -67,9 +67,11 @@ day filters and ordinal prefixes. Choose exactly one destination:
   - before: another place or reservation block in the same section
   - after: another place or reservation block in the same section
 
-Positions count all displayed blocks, including notes and checklists. Cross-section moves are not
-supported. If a reference is ambiguous, nothing is changed and the tool returns candidates for a
-more specific retry.
+Positions count all displayed blocks, including notes and checklists — but notes and checklists
+cannot be used as before/after targets, which resolve only to place or reservation blocks.
+Cross-section moves are not supported; do not emulate them by removing and re-adding the block,
+which discards its ID, notes, times, and booking details. If a reference is ambiguous, nothing is
+changed and the tool returns candidates for a more specific retry.
 `.trim();
 
 type Args = z.infer<typeof moveBlockInputSchema>;
